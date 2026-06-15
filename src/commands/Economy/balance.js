@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getEconomyData } from '../../utils/economy.js';
 import { withErrorHandling } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
@@ -25,52 +25,18 @@ export default {
         const netWorth = wallet + bank;
         const bankPercent = Math.round((bank / maxBank) * 100);
 
-        await InteractionHelper.safeEditReply(interaction, {
-            components: [
-                {
-                    type: 17,
-                    accent_color: 0xF1C40F,
-                    components: [
-                        {
-                            type: 10,
-                            content: "# 💰 Balance Overview"
-                        },
-                        {
-                            type: 14,
-                            divider: true
-                        },
-                        {
-                            type: 10,
-                            content: `👤 **User:** ${targetUser}`
-                        },
-                        {
-                            type: 14,
-                            divider: false
-                        },
-                        {
-                            type: 10,
-                            content: `💵 **Wallet:** $${wallet.toLocaleString()}`
-                        },
-                        {
-                            type: 10,
-                            content: `🏦 **Bank:** $${bank.toLocaleString()} / $${maxBank.toLocaleString()} \`${bankPercent}% full\``
-                        },
-                        {
-                            type: 10,
-                            content: `💎 **Net Worth:** $${netWorth.toLocaleString()}`
-                        },
-                        {
-                            type: 14,
-                            divider: true
-                        },
-                        {
-                            type: 10,
-                            content: `-# 🕒 Requested by ${interaction.user}`
-                        }
-                    ]
-                }
-            ],
-            flags: 32768
-        });
+        const embed = new EmbedBuilder()
+            .setTitle('💰 Balance Overview')
+            .setColor(0xF1C40F)
+            .setThumbnail(targetUser.displayAvatarURL())
+            .addFields(
+                { name: '👤 User', value: `${targetUser}`, inline: false },
+                { name: '💵 Wallet', value: `$${wallet.toLocaleString()}`, inline: true },
+                { name: '🏦 Bank', value: `$${bank.toLocaleString()} / $${maxBank.toLocaleString()} \`${bankPercent}% full\``, inline: true },
+                { name: '💎 Net Worth', value: `$${netWorth.toLocaleString()}`, inline: true }
+            )
+            .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
+
+        await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
     }, { command: "balance" })
 };
