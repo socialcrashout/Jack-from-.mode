@@ -2,8 +2,9 @@ import { logger } from './logger.js';
 import { MessageFlags } from 'discord.js';
 import { handleInteractionError } from './errorHandler.js';
 
-const INTERACTION_TIMEOUT_MS = 15 * 60 * 1000;
-const DEFAULT_DEFER_OPTIONS = { flags: MessageFlags.Ephemeral | 32768 };
+
+const INTERACTION_TIMEOUT_MS = 15 * 60 * 1000; 
+const DEFAULT_DEFER_OPTIONS = { flags: MessageFlags.Ephemeral };
 
 function sanitizeEditReplyOptions(options = {}) {
     if (!options || typeof options !== 'object') {
@@ -11,56 +12,73 @@ function sanitizeEditReplyOptions(options = {}) {
     }
 
     const { flags, ephemeral, ...rest } = options;
-
-    if (flags & 32768) {
+    
+    // Keep flags if it's the components v2 flag (32768)
+    if (flags === 32768 || flags === MessageFlags.IsComponentsV2) {
         return { ...rest, flags };
     }
-
+    
     return rest;
 }
 
+
+
+
 export class InteractionHelper {
-    static patchInteractionResponses(interaction) {
-        if (!interaction || interaction.__titanResponsePatched) {
-            return;
-        }
-
-        const originalReply = interaction.reply?.bind(interaction);
-        const originalEditReply = interaction.editReply?.bind(interaction);
-        const originalFollowUp = interaction.followUp?.bind(interaction);
-
-        if (!originalReply || !originalEditReply || !originalFollowUp) {
-            return;
-        }
-
-        interaction.reply = async (options) => {
-            if (!interaction.deferred && !interaction.replied) {
-                return await originalReply(options);
+        static patchInteractionResponses(interaction) {
+            if (!interaction || interaction.__titanResponsePatched) {
+                return;
             }
 
-            if (interaction.deferred && !interaction.replied) {
-                return await originalEditReply(sanitizeEditReplyOptions(options));
+            const originalReply = interaction.reply?.bind(interaction);
+            const originalEditReply = interaction.editReply?.bind(interaction);
+            const originalFollowUp = interaction.followUp?.bind(interaction);
+
+            if (!originalReply || !originalEditReply || !originalFollowUp) {
+                return;
             }
 
-            return await originalFollowUp(options);
-        };
+            interaction.reply = async (options) => {
+                if (!interaction.deferred && !interaction.replied) {
+                    return await originalReply(options);
+                }
 
-        interaction.__titanResponsePatched = true;
-    }
+                if (interaction.deferred && !interaction.replied) {
+                    return await originalEditReply(sanitizeEditReplyOptions(options));
+                }
+
+                return await originalFollowUp(options);
+            };
+
+            interaction.__titanResponsePatched = true;
+        }
+
+    
+
+
+
 
     static isInteractionValid(interaction) {
         if (!interaction || typeof interaction !== 'object') return false;
         if (!interaction.id || typeof interaction.id !== 'string') return false;
+        
+        
         if (!interaction.user || typeof interaction.user !== 'object') return false;
-
+        
+        
         if (interaction.createdTimestamp && (Date.now() - interaction.createdTimestamp) > INTERACTION_TIMEOUT_MS) {
             return false;
         }
-
+        
         return true;
     }
 
-    static async ensureReady(interaction, deferOptions = DEFAULT_DEFER_OPTIONS) {
+    
+
+
+
+
+    static async ensureReady(interaction, deferOptions = { flags: MessageFlags.Ephemeral }) {
         if (!this.isInteractionValid(interaction)) {
             return false;
         }
@@ -72,7 +90,12 @@ export class InteractionHelper {
         return await this.safeDefer(interaction, deferOptions);
     }
 
-    static async safeDefer(interaction, options = DEFAULT_DEFER_OPTIONS) {
+    
+
+
+
+
+    static async safeDefer(interaction, options = {}) {
         try {
             if (interaction.deferred || interaction.replied) {
                 return true;
@@ -82,7 +105,7 @@ export class InteractionHelper {
                 logger.warn(`Interaction ${interaction.id} has expired before defer, ignoring`);
                 return false;
             }
-
+            
             await interaction.deferReply(options);
             return true;
         } catch (error) {
@@ -99,18 +122,23 @@ export class InteractionHelper {
         }
     }
 
+    
+
+
+
+
     static async safeEditReply(interaction, options) {
         try {
             if (!this.isInteractionValid(interaction)) {
                 logger.warn(`Interaction ${interaction.id} has expired before edit, ignoring`);
                 return false;
             }
-
+            
             if (!interaction.replied && !interaction.deferred) {
                 logger.debug(`Interaction ${interaction.id} not deferred, using reply fallback instead of edit`);
                 return await this.safeReply(interaction, options);
             }
-
+            
             await interaction.editReply(sanitizeEditReplyOptions(options));
             return true;
         } catch (error) {
@@ -130,6 +158,11 @@ export class InteractionHelper {
             return false;
         }
     }
+
+    
+
+
+
 
     static async safeReply(interaction, options) {
         try {
@@ -164,9 +197,14 @@ export class InteractionHelper {
         }
     }
 
-    static async safeExecute(interaction, commandFunction, errorEmbed, options = {}) {
-        const { autoDefer = true, deferOptions = DEFAULT_DEFER_OPTIONS } = options;
+    
 
+
+
+
+    static async safeExecute(interaction, commandFunction, errorEmbed, options = {}) {
+        const { autoDefer = true, deferOptions = { flags: MessageFlags.Ephemeral } } = options;
+        
         if (!this.isInteractionValid(interaction)) {
             logger.warn(`Interaction ${interaction.id} has expired, ignoring`);
             return;
@@ -175,11 +213,11 @@ export class InteractionHelper {
         if (autoDefer && !interaction.replied && !interaction.deferred) {
             const deferStartTime = Date.now();
             const deferSuccess = await this.safeDefer(interaction, deferOptions);
-
+            
             if (Date.now() - deferStartTime > 3000) {
                 logger.warn(`Interaction ${interaction.id} defer took too long (${Date.now() - deferStartTime}ms), command may expire`);
             }
-
+            
             if (!deferSuccess) {
                 logger.warn(`Interaction ${interaction.id} defer failed, skipping command execution`);
                 return;
@@ -214,8 +252,13 @@ export class InteractionHelper {
         }
     }
 
+    
+
+
+
+
     static async universalReply(interaction, options) {
-        const isReady = await this.ensureReady(interaction, options.flags ? { flags: options.flags } : DEFAULT_DEFER_OPTIONS);
+        const isReady = await this.ensureReady(interaction, options.flags ? { flags: options.flags } : {});
         if (!isReady) {
             return false;
         }
@@ -227,6 +270,9 @@ export class InteractionHelper {
         }
     }
 }
+
+
+
 
 export function withErrorHandling(target, propertyName, descriptor) {
     const originalMethod = descriptor.value;
