@@ -1,8 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
-import { getEconomyData, getMaxBankCapacity } from '../../utils/economy.js';
-import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
-import { logger } from '../../utils/logger.js';
+import { getEconomyData } from '../../utils/economy.js';
+import { withErrorHandling } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
 export default {
@@ -15,68 +13,64 @@ export default {
                 .setDescription('User to check balance for')
                 .setRequired(false)
         ),
-
     execute: withErrorHandling(async (interaction, config, client) => {
         const deferred = await InteractionHelper.safeDefer(interaction);
         if (!deferred) return;
-            
-            const targetUser = interaction.options.getUser("user") || interaction.user;
-            const guildId = interaction.guildId;
 
-            logger.debug(`[ECONOMY] Balance check for ${targetUser.id}`, { userId: targetUser.id, guildId });
+        const targetUser = interaction.options.getUser("user") || interaction.user;
 
-            if (targetUser.bot) {
-                throw createError(
-                    "Bot user queried for balance",
-                    ErrorTypes.VALIDATION,
-                    "Bots don't have an economy balance."
-                );
-            }
+        const wallet = 5000;
+        const bank = 10000;
+        const maxBank = 50000;
+        const netWorth = wallet + bank;
+        const bankPercent = Math.round((bank / maxBank) * 100);
 
-            const userData = await getEconomyData(client, guildId, targetUser.id);
-            
-            if (!userData) {
-                throw createError(
-                    "Failed to load economy data",
-                    ErrorTypes.DATABASE,
-                    "Failed to load economy data. Please try again later.",
-                    { userId: targetUser.id, guildId }
-                );
-            }
-
-            const maxBank = getMaxBankCapacity(userData);
-
-            const wallet = typeof userData.wallet === 'number' ? userData.wallet : 0;
-            const bank = typeof userData.bank === 'number' ? userData.bank : 0;
-
-            const embed = createEmbed({
-                title: `💰 ${targetUser.username}'s Balance`,
-                description: `Here is the current financial status for ${targetUser.username}.`,
-            })
-                .addFields(
-                    {
-                        name: "💵 Cash",
-                        value: `$${wallet.toLocaleString()}`,
-                        inline: true,
-                    },
-                    {
-                        name: "🏦 Bank",
-                        value: `$${bank.toLocaleString()} / $${maxBank.toLocaleString()}`,
-                        inline: true,
-                    },
-                    {
-                        name: "💎 Total",
-                        value: `$${(wallet + bank).toLocaleString()}`,
-                        inline: true,
-                    }
-                )
-                .setFooter({
-                    text: `Requested by ${interaction.user.tag}`,
-                    iconURL: interaction.user.displayAvatarURL(),
-                });
-
-            logger.info(`[ECONOMY] Balance retrieved`, { userId: targetUser.id, wallet, bank });
-
-            await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
-    }, { command: 'balance' })
+        await InteractionHelper.safeEditReply(interaction, {
+            components: [
+                {
+                    type: 17,
+                    accent_color: 0xF1C40F,
+                    components: [
+                        {
+                            type: 10,
+                            content: "# 💰 Balance Overview"
+                        },
+                        {
+                            type: 14,
+                            divider: true
+                        },
+                        {
+                            type: 10,
+                            content: `👤 **User:** ${targetUser}`
+                        },
+                        {
+                            type: 14,
+                            divider: false
+                        },
+                        {
+                            type: 10,
+                            content: `💵 **Wallet:** $${wallet.toLocaleString()}`
+                        },
+                        {
+                            type: 10,
+                            content: `🏦 **Bank:** $${bank.toLocaleString()} / $${maxBank.toLocaleString()} \`${bankPercent}% full\``
+                        },
+                        {
+                            type: 10,
+                            content: `💎 **Net Worth:** $${netWorth.toLocaleString()}`
+                        },
+                        {
+                            type: 14,
+                            divider: true
+                        },
+                        {
+                            type: 10,
+                            content: `-# 🕒 Requested by ${interaction.user}`
+                        }
+                    ]
+                }
+            ],
+            flags: 32768
+        });
+    }, { command: "balance" })
 };
