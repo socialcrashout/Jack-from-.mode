@@ -1,5 +1,5 @@
 import { getColor } from '../../config/bot.js';
-import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags, ComponentType, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize } from 'discord.js';
 import { createEmbed, errorEmbed } from '../../utils/embeds.js';
 import { getLevelingConfig, saveLevelingConfig } from '../../services/leveling.js';
 import { botHasPermission } from '../../utils/permissionGuard.js';
@@ -7,6 +7,45 @@ import { TitanBotError, ErrorTypes, handleInteractionError } from '../../utils/e
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
 import levelDashboard from './modules/level_dashboard.js';
+
+// Hardcoded level-up notification channel ID
+const LEVEL_UP_CHANNEL_ID = '1508652996257386516';
+
+/**
+ * Builds a Components v2 container message for level-up notifications.
+ * @param {import('discord.js').GuildMember} member - The member who leveled up
+ * @param {number} level - The new level reached
+ * @param {string} [customMessage] - Optional custom message template with {user} and {level} placeholders
+ * @returns {import('discord.js').BaseMessageOptions} Message options with components v2 container
+ */
+export function buildLevelUpMessage(member, level, customMessage) {
+    const template = customMessage ?? '{user} has leveled up to level {level}!';
+    const resolvedText = template
+        .replace('{user}', `<@${member.id}>`)
+        .replace('{level}', String(level));
+
+    const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`🎉 **Level Up!**`),
+        )
+        .addSeparatorComponents(
+            new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
+        )
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(resolvedText),
+        )
+        .addSeparatorComponents(
+            new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+        )
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`-# Level **${level}** reached`),
+        );
+
+    return {
+        components: [container],
+        flags: MessageFlags.IsComponentsV2,
+    };
+}
 
 export default {
     data: new SlashCommandBuilder()
@@ -18,13 +57,6 @@ export default {
             subcommand
                 .setName('setup')
                 .setDescription('Set up the leveling system — this also enables it')
-                .addChannelOption((option) =>
-                    option
-                        .setName('channel')
-                        .setDescription('Channel to send level-up notifications in')
-                        .addChannelTypes(ChannelType.GuildText)
-                        .setRequired(true),
-                )
                 .addIntegerOption((option) =>
                     option
                         .setName('xp_min')
@@ -91,7 +123,6 @@ export default {
             }
 
             if (subcommand === 'setup') {
-                const channel = interaction.options.getChannel('channel');
                 const xpMin = interaction.options.getInteger('xp_min') ?? 15;
                 const xpMax = interaction.options.getInteger('xp_max') ?? 25;
                 const message =
@@ -110,9 +141,23 @@ export default {
                     });
                 }
 
+                // Resolve the hardcoded channel
+                const channel = await interaction.guild.channels.fetch(LEVEL_UP_CHANNEL_ID).catch(() => null);
+
+                if (!channel) {
+                    return await InteractionHelper.safeEditReply(interaction, {
+                        embeds: [
+                            errorEmbed(
+                                'Channel Not Found',
+                                `Could not find the level-up channel (<#${LEVEL_UP_CHANNEL_ID}>). Make sure it exists and the bot can see it.`,
+                            ),
+                        ],
+                    });
+                }
+
                 if (!botHasPermission(channel, ['SendMessages', 'EmbedLinks'])) {
                     throw new TitanBotError(
-                        'Bot missing permissions in the specified channel',
+                        'Bot missing permissions in the level-up channel',
                         ErrorTypes.PERMISSION,
                         `I need **SendMessages** and **EmbedLinks** permissions in ${channel} to send level-up notifications.`,
                     );
@@ -135,7 +180,7 @@ export default {
                     ...existingConfig,
                     configured: true,
                     enabled: true,
-                    levelUpChannel: channel.id,
+                    levelUpChannel: LEVEL_UP_CHANNEL_ID,
                     xpRange: { min: xpMin, max: xpMax },
                     xpCooldown: xpCooldown,
                     levelUpMessage: message,
@@ -145,7 +190,7 @@ export default {
                 await saveLevelingConfig(client, interaction.guildId, newConfig);
 
                 logger.info(`Leveling system set up in guild ${interaction.guildId}`, {
-                    channelId: channel.id,
+                    channelId: LEVEL_UP_CHANNEL_ID,
                     xpMin,
                     xpMax,
                     xpCooldown,
@@ -158,7 +203,7 @@ export default {
                             title: '✅ Leveling System Set Up',
                             description:
                                 `The leveling system is now **enabled** and ready to go.\n\n` +
-                                `**Level-up Channel:** ${channel}\n` +
+                                `**Level-up Channel:** <#${LEVEL_UP_CHANNEL_ID}>\n` +
                                 `**XP per Message:** ${xpMin} – ${xpMax}\n` +
                                 `**XP Cooldown:** ${xpCooldown}s\n` +
                                 `**Level-up Message:** \`${message}\`\n\n` +
