@@ -32,8 +32,7 @@ export default {
                     },
                     {
                         type: 14, // Separator
-                        divider: true,
-                        spacing: 1
+                        divider: true
                     },
                     {
                         type: 10,
@@ -41,57 +40,23 @@ export default {
                     },
                     {
                         type: 14,
-                        divider: false,
-                        spacing: 1
+                        divider: false
                     },
                     {
-                        type: 1, // Action Row
-                        components: [
-                            {
-                                type: 9, // Section
-                                components: [
-                                    {
-                                        type: 10,
-                                        content: "### 💵 Wallet"
-                                    },
-                                    {
-                                        type: 10,
-                                        content: `**$${wallet.toLocaleString()}**`
-                                    }
-                                ]
-                            },
-                            {
-                                type: 9, // Section
-                                components: [
-                                    {
-                                        type: 10,
-                                        content: "### 🏦 Bank"
-                                    },
-                                    {
-                                        type: 10,
-                                        content: `**$${bank.toLocaleString()}** / $${maxBank.toLocaleString()}\n\`${bankPercent}% full\``
-                                    }
-                                ]
-                            },
-                            {
-                                type: 9, // Section
-                                components: [
-                                    {
-                                        type: 10,
-                                        content: "### 💎 Net Worth"
-                                    },
-                                    {
-                                        type: 10,
-                                        content: `**$${netWorth.toLocaleString()}**`
-                                    }
-                                ]
-                            }
-                        ]
+                        type: 10,
+                        content: `💵 **Wallet:** $${wallet.toLocaleString()}`
+                    },
+                    {
+                        type: 10,
+                        content: `🏦 **Bank:** $${bank.toLocaleString()} / $${maxBank.toLocaleString()} \`${bankPercent}% full\``
+                    },
+                    {
+                        type: 10,
+                        content: `💎 **Net Worth:** $${netWorth.toLocaleString()}`
                     },
                     {
                         type: 14,
-                        divider: true,
-                        spacing: 1
+                        divider: true
                     },
                     {
                         type: 10,
@@ -103,7 +68,7 @@ export default {
 
         await InteractionHelper.safeEditReply(interaction, {
             components,
-            flags: 32768 // IS_COMPONENTS_V2
+            flags: 32768
         });
     }, { command: "balance" })
 };
