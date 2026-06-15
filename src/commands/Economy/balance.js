@@ -8,7 +8,6 @@ export default {
                 .setDescription('User to check balance for')
                 .setRequired(false)
         ),
-
     execute: withErrorHandling(async (interaction, config, client) => {
         const deferred = await InteractionHelper.safeDefer(interaction);
         if (!deferred) return;
@@ -19,30 +18,84 @@ export default {
         const wallet = 5000;
         const bank = 10000;
         const maxBank = 50000;
+        const netWorth = wallet + bank;
+        const bankPercent = Math.round((bank / maxBank) * 100);
 
         const components = [
             {
-                type: 17,
+                type: 17, // Container
                 accent_color: 0xF1C40F,
                 components: [
                     {
-                        type: 10,
+                        type: 10, // Text Display
                         content: "# 💰 Balance Overview"
                     },
                     {
+                        type: 14, // Separator
+                        divider: true,
+                        spacing: 1
+                    },
+                    {
+                        type: 10,
+                        content: `👤 **User:** ${targetUser}`
+                    },
+                    {
                         type: 14,
-                        divider: true
+                        divider: false,
+                        spacing: 1
+                    },
+                    {
+                        type: 1, // Action Row
+                        components: [
+                            {
+                                type: 9, // Section
+                                components: [
+                                    {
+                                        type: 10,
+                                        content: "### 💵 Wallet"
+                                    },
+                                    {
+                                        type: 10,
+                                        content: `**$${wallet.toLocaleString()}**`
+                                    }
+                                ]
+                            },
+                            {
+                                type: 9, // Section
+                                components: [
+                                    {
+                                        type: 10,
+                                        content: "### 🏦 Bank"
+                                    },
+                                    {
+                                        type: 10,
+                                        content: `**$${bank.toLocaleString()}** / $${maxBank.toLocaleString()}\n\`${bankPercent}% full\``
+                                    }
+                                ]
+                            },
+                            {
+                                type: 9, // Section
+                                components: [
+                                    {
+                                        type: 10,
+                                        content: "### 💎 Net Worth"
+                                    },
+                                    {
+                                        type: 10,
+                                        content: `**$${netWorth.toLocaleString()}**`
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        type: 14,
+                        divider: true,
+                        spacing: 1
                     },
                     {
                         type: 10,
-                        content: `## 👤 User\n${targetUser}`
-                    },
-                    {
-                        type: 10,
-                        content:
-                            `### 💵 Wallet\n**$${wallet.toLocaleString()}**\n\n` +
-                            `### 🏦 Bank\n**$${bank.toLocaleString()} / $${maxBank.toLocaleString()}**\n\n` +
-                            `### 💎 Net Worth\n**$${(wallet + bank).toLocaleString()}**`
+                        content: `-# 🕒 Requested by ${interaction.user}`
                     }
                 ]
             }
@@ -50,7 +103,7 @@ export default {
 
         await InteractionHelper.safeEditReply(interaction, {
             components,
-            flags: 32768
+            flags: 32768 // IS_COMPONENTS_V2
         });
     }, { command: "balance" })
 };
