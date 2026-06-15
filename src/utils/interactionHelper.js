@@ -12,6 +12,12 @@ function sanitizeEditReplyOptions(options = {}) {
     }
 
     const { flags, ephemeral, ...rest } = options;
+    
+    // Keep flags if it's the components v2 flag (32768)
+    if (flags === 32768 || flags === MessageFlags.IsComponentsV2) {
+        return { ...rest, flags };
+    }
+    
     return rest;
 }
 
@@ -72,7 +78,6 @@ export class InteractionHelper {
 
 
 
-
     static async ensureReady(interaction, deferOptions = { flags: MessageFlags.Ephemeral }) {
         if (!this.isInteractionValid(interaction)) {
             return false;
@@ -86,7 +91,6 @@ export class InteractionHelper {
     }
 
     
-
 
 
 
@@ -105,7 +109,7 @@ export class InteractionHelper {
             await interaction.deferReply(options);
             return true;
         } catch (error) {
-if (error.code === 10062) {
+            if (error.code === 10062) {
                 logger.warn(`Interaction ${interaction.id} expired during defer:`, error.message);
                 return false;
             }
@@ -119,7 +123,6 @@ if (error.code === 10062) {
     }
 
     
-
 
 
 
@@ -139,11 +142,11 @@ if (error.code === 10062) {
             await interaction.editReply(sanitizeEditReplyOptions(options));
             return true;
         } catch (error) {
-if (error.code === 10062) {
+            if (error.code === 10062) {
                 logger.warn(`Interaction ${interaction.id} expired during edit:`, error.message);
                 return false;
             }
-if (error.code === 40060) {
+            if (error.code === 40060) {
                 logger.warn(`Interaction ${interaction.id} already acknowledged during edit:`, error.message);
                 return false;
             }
@@ -157,7 +160,6 @@ if (error.code === 40060) {
     }
 
     
-
 
 
 
@@ -182,11 +184,11 @@ if (error.code === 40060) {
             await interaction.reply(options);
             return true;
         } catch (error) {
-if (error.code === 10062) {
+            if (error.code === 10062) {
                 logger.warn(`Interaction ${interaction.id} expired during reply:`, error.message);
                 return false;
             }
-if (error.code === 40060) {
+            if (error.code === 40060) {
                 logger.warn(`Interaction ${interaction.id} already acknowledged during reply:`, error.message);
                 return false;
             }
@@ -196,9 +198,6 @@ if (error.code === 40060) {
     }
 
     
-
-
-
 
 
 
@@ -215,7 +214,7 @@ if (error.code === 40060) {
             const deferStartTime = Date.now();
             const deferSuccess = await this.safeDefer(interaction, deferOptions);
             
-if (Date.now() - deferStartTime > 3000) {
+            if (Date.now() - deferStartTime > 3000) {
                 logger.warn(`Interaction ${interaction.id} defer took too long (${Date.now() - deferStartTime}ms), command may expire`);
             }
             
@@ -258,7 +257,6 @@ if (Date.now() - deferStartTime > 3000) {
 
 
 
-
     static async universalReply(interaction, options) {
         const isReady = await this.ensureReady(interaction, options.flags ? { flags: options.flags } : {});
         if (!isReady) {
@@ -276,9 +274,6 @@ if (Date.now() - deferStartTime > 3000) {
 
 
 
-
-
-
 export function withErrorHandling(target, propertyName, descriptor) {
     const originalMethod = descriptor.value;
 
@@ -292,5 +287,3 @@ export function withErrorHandling(target, propertyName, descriptor) {
 
     return descriptor;
 }
-
-
