@@ -1,8 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
 import { getEconomyData, setEconomyData } from '../../utils/economy.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
-import { MessageTemplates } from '../../utils/messageTemplates.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
 const MINE_COOLDOWN = 60 * 60 * 1000;
@@ -27,72 +25,94 @@ export default {
     execute: withErrorHandling(async (interaction, config, client) => {
         const deferred = await InteractionHelper.safeDefer(interaction);
         if (!deferred) return;
-            
-            const userId = interaction.user.id;
-            const guildId = interaction.guildId;
-            const now = Date.now();
 
-            const userData = await getEconomyData(client, guildId, userId);
-            const lastMine = userData.lastMine || 0;
-            const hasDiamondPickaxe = userData.inventory["diamond_pickaxe"] || 0;
-            const hasPickaxe = userData.inventory["pickaxe"] || 0;
+        const userId = interaction.user.id;
+        const guildId = interaction.guildId;
+        const now = Date.now();
 
-            if (now < lastMine + MINE_COOLDOWN) {
-                const remaining = lastMine + MINE_COOLDOWN - now;
-                const hours = Math.floor(remaining / (1000 * 60 * 60));
-                const minutes = Math.floor(
-                    (remaining % (1000 * 60 * 60)) / (1000 * 60),
-                );
+        const userData = await getEconomyData(client, guildId, userId);
+        const lastMine = userData.lastMine || 0;
+        const hasDiamondPickaxe = userData.inventory["diamond_pickaxe"] || 0;
+        const hasPickaxe = userData.inventory["pickaxe"] || 0;
 
-                throw createError(
-                    "Mining cooldown active",
-                    ErrorTypes.RATE_LIMIT,
-                    `Your pickaxe is cooling down. Wait for **${hours}h ${minutes}m** before mining again.`,
-                    { remaining, cooldownType: 'mine' }
-                );
-            }
+        if (now < lastMine + MINE_COOLDOWN) {
+            const remaining = lastMine + MINE_COOLDOWN - now;
+            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
 
-            const baseEarned =
-                Math.floor(
-                    Math.random() * (BASE_MAX_REWARD - BASE_MIN_REWARD + 1),
-                ) + BASE_MIN_REWARD;
+            throw createError(
+                "Mining cooldown active",
+                ErrorTypes.RATE_LIMIT,
+                `Your pickaxe is cooling down. Wait for **${hours}h ${minutes}m** before mining again.`,
+                { remaining, cooldownType: 'mine' }
+            );
+        }
 
-            let finalEarned = baseEarned;
-            let multiplierMessage = "";
+        const baseEarned = Math.floor(Math.random() * (BASE_MAX_REWARD - BASE_MIN_REWARD + 1)) + BASE_MIN_REWARD;
+        let finalEarned = baseEarned;
+        let multiplierText = '';
 
-            if (hasDiamondPickaxe > 0) {
-                finalEarned = Math.floor(baseEarned * DIAMOND_PICKAXE_MULTIPLIER);
-                multiplierMessage = `\n💎 **Diamond Pickaxe Bonus: +100%**`;
-            } else if (hasPickaxe > 0) {
-                finalEarned = Math.floor(baseEarned * PICKAXE_MULTIPLIER);
-                multiplierMessage = `\n⛏️ **Pickaxe Bonus: +20%**`;
-            }
+        if (hasDiamondPickaxe > 0) {
+            finalEarned = Math.floor(baseEarned * DIAMOND_PICKAXE_MULTIPLIER);
+            multiplierText = `\n💎 **Diamond Pickaxe Bonus: +100%**`;
+        } else if (hasPickaxe > 0) {
+            finalEarned = Math.floor(baseEarned * PICKAXE_MULTIPLIER);
+            multiplierText = `\n⛏️ **Pickaxe Bonus: +20%**`;
+        }
 
-            const location =
-                MINE_LOCATIONS[
-                    Math.floor(Math.random() * MINE_LOCATIONS.length)
-                ];
+        const location = MINE_LOCATIONS[Math.floor(Math.random() * MINE_LOCATIONS.length)];
 
-            userData.wallet += finalEarned;
-userData.lastMine = now;
+        userData.wallet += finalEarned;
+        userData.lastMine = now;
 
-            await setEconomyData(client, guildId, userId, userData);
+        await setEconomyData(client, guildId, userId, userData);
 
-            const embed = successEmbed(
-                "💰 Mining Expedition Successful!",
-                `You explored a **${location}** and managed to find minerals worth **$${finalEarned.toLocaleString()}**!${multiplierMessage}`,
-            )
-                .addFields({
-                    name: "💵 New Cash Balance",
-                    value: `$${userData.wallet.toLocaleString()}`,
-                    inline: true,
-                })
-                .setFooter({ text: `Next mine available in 1 hour.` });
-
-            await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
+        await InteractionHelper.safeEditReply(interaction, {
+            components: [
+                {
+                    type: 17,
+                    accent_color: 0x95A5A6,
+                    components: [
+                        {
+                            type: 10,
+                            content: "# ⛏️ Mining Expedition Successful!"
+                        },
+                        {
+                            type: 14,
+                            divider: true
+                        },
+                        {
+                            type: 10,
+                            content: `You explored a **${location}** and found minerals worth **$${finalEarned.toLocaleString()}**!${multiplierText}`
+                        },
+                        {
+                            type: 14,
+                            divider: false
+                        },
+                        {
+                            type: 10,
+                            content: `💵 **New Wallet Balance:** $${userData.wallet.toLocaleString()}`
+                        },
+                        {
+                            type: 14,
+                            divider: false
+                        },
+                        {
+                            type: 10,
+                            content: `🕐 **Next Mine:** Available in 1 hour`
+                        },
+                        {
+                            type: 14,
+                            divider: true
+                        },
+                        {
+                            type: 10,
+                            content: `-# 🕒 Requested by ${interaction.user}`
+                        }
+                    ]
+                }
+            ],
+            flags: 32768
+        });
     }, { command: 'mine' })
 };
-
-
-
-
