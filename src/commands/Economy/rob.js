@@ -1,8 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
 import { getEconomyData, setEconomyData } from '../../utils/economy.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
-import { MessageTemplates } from '../../utils/messageTemplates.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
 const ROB_COOLDOWN = 4 * 60 * 60 * 1000;
@@ -14,6 +12,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('rob')
         .setDescription('Attempt to rob another user (very risky)')
+        .setDefaultMemberPermissions(null)
         .addUserOption(option =>
             option
                 .setName('user')
@@ -24,133 +23,219 @@ export default {
     execute: withErrorHandling(async (interaction, config, client) => {
         const deferred = await InteractionHelper.safeDefer(interaction);
         if (!deferred) return;
-            
-            const robberId = interaction.user.id;
-            const victimUser = interaction.options.getUser("user");
-            const guildId = interaction.guildId;
-            const now = Date.now();
 
-            if (robberId === victimUser.id) {
-                throw createError(
-                    "Cannot rob self",
-                    ErrorTypes.VALIDATION,
-                    "You cannot rob yourself.",
-                    { robberId, victimId: victimUser.id }
-                );
-            }
-            
-            if (victimUser.bot) {
-                throw createError(
-                    "Cannot rob bot",
-                    ErrorTypes.VALIDATION,
-                    "You cannot rob a bot.",
-                    { victimId: victimUser.id, isBot: true }
-                );
-            }
+        const robberId = interaction.user.id;
+        const victimUser = interaction.options.getUser("user");
+        const guildId = interaction.guildId;
+        const now = Date.now();
 
-            const robberData = await getEconomyData(client, guildId, robberId);
-            const victimData = await getEconomyData(client, guildId, victimUser.id);
-            
-            if (!robberData || !victimData) {
-                throw createError(
-                    "Failed to load economy data",
-                    ErrorTypes.DATABASE,
-                    "Failed to load economy data. Please try again later.",
-                    { robberId: !!robberData, victimId: !!victimData, guildId }
-                );
-            }
-            
-            const lastRob = robberData.lastRob || 0;
+        if (robberId === victimUser.id) {
+            throw createError(
+                "Cannot rob self",
+                ErrorTypes.VALIDATION,
+                "You cannot rob yourself.",
+                { robberId, victimId: victimUser.id }
+            );
+        }
 
-            if (now < lastRob + ROB_COOLDOWN) {
-                const remaining = lastRob + ROB_COOLDOWN - now;
-                const hours = Math.floor(remaining / (1000 * 60 * 60));
-                const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+        if (victimUser.bot) {
+            throw createError(
+                "Cannot rob bot",
+                ErrorTypes.VALIDATION,
+                "You cannot rob a bot.",
+                { victimId: victimUser.id, isBot: true }
+            );
+        }
 
-                throw createError(
-                    "Robbery cooldown active",
-                    ErrorTypes.RATE_LIMIT,
-                    `You need to lay low. Wait **${hours}h ${minutes}m** before attempting another robbery.`,
-                    { remaining, hours, minutes, cooldownType: 'rob' }
-                );
-            }
+        const robberData = await getEconomyData(client, guildId, robberId);
+        const victimData = await getEconomyData(client, guildId, victimUser.id);
 
-            if (victimData.wallet < 500) {
-                throw createError(
-                    "Victim too poor",
-                    ErrorTypes.VALIDATION,
-                    `${victimUser.username} is too poor. They need at least $500 cash to be worth robbing.`,
-                    { victimWallet: victimData.wallet, required: 500 }
-                );
-            }
+        if (!robberData || !victimData) {
+            throw createError(
+                "Failed to load economy data",
+                ErrorTypes.DATABASE,
+                "Failed to load economy data. Please try again later.",
+                { robberId: !!robberData, victimId: !!victimData, guildId }
+            );
+        }
 
-            const hasSafe = victimData.inventory["personal_safe"] || 0;
+        const lastRob = robberData.lastRob || 0;
 
-            if (hasSafe > 0) {
-                robberData.lastRob = now;
-                await setEconomyData(client, guildId, robberId, robberData);
+        if (now < lastRob + ROB_COOLDOWN) {
+            const remaining = lastRob + ROB_COOLDOWN - now;
+            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
 
-                return await InteractionHelper.safeEditReply(interaction, {
-                    embeds: [
-                        MessageTemplates.ERRORS.CONFIGURATION_REQUIRED(
-                            "robbery protection",
-                            `${victimUser.username} was prepared! Your attempt failed because they own a **Personal Safe**. You got away clean but didn't gain anything.`
-                        )
-                    ],
-                });
-            }
+            throw createError(
+                "Robbery cooldown active",
+                ErrorTypes.RATE_LIMIT,
+                `You need to lay low. Wait **${hours}h ${minutes}m** before attempting another robbery.`,
+                { remaining, hours, minutes, cooldownType: 'rob' }
+            );
+        }
 
-            const isSuccessful = Math.random() < BASE_ROB_SUCCESS_CHANCE;
-            let resultEmbed;
+        if (victimData.wallet < 500) {
+            throw createError(
+                "Victim too poor",
+                ErrorTypes.VALIDATION,
+                `${victimUser.username} is too poor. They need at least $500 cash to be worth robbing.`,
+                { victimWallet: victimData.wallet, required: 500 }
+            );
+        }
 
-            if (isSuccessful) {
-                const amountStolen = Math.floor(victimData.wallet * ROB_PERCENTAGE);
+        const hasSafe = victimData.inventory["personal_safe"] || 0;
 
-                robberData.wallet = (robberData.wallet || 0) + amountStolen;
-                victimData.wallet = (victimData.wallet || 0) - amountStolen;
+        if (hasSafe > 0) {
+            robberData.lastRob = now;
+            await setEconomyData(client, guildId, robberId, robberData);
 
-                resultEmbed = MessageTemplates.SUCCESS.DATA_UPDATED(
-                    "robbery",
-                    `You successfully stole **$${amountStolen.toLocaleString()}** from ${victimUser.username}!`
-                );
-            } else {
-                const fineAmount = Math.floor((robberData.wallet || 0) * FINE_PERCENTAGE);
+            return await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        accent_color: 0xE67E22,
+                        components: [
+                            {
+                                type: 10,
+                                content: "# 🔒 Robbery Blocked!"
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `${victimUser.username} was prepared! Your attempt failed because they own a **Personal Safe**. You got away clean but didn't gain anything.`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# 🕒 Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
+            });
+        }
 
-                if ((robberData.wallet || 0) < fineAmount) {
-                    robberData.wallet = 0;
-                } else {
-                    robberData.wallet = (robberData.wallet || 0) - fineAmount;
-                }
+        const isSuccessful = Math.random() < BASE_ROB_SUCCESS_CHANCE;
 
-                resultEmbed = MessageTemplates.ERRORS.INSUFFICIENT_PERMISSIONS(
-                    "robbery failed",
-                    `You failed the robbery and were caught! You were fined **$${fineAmount.toLocaleString()}** of your own cash.`
-                );
-            }
+        if (isSuccessful) {
+            const amountStolen = Math.floor(victimData.wallet * ROB_PERCENTAGE);
 
+            robberData.wallet = (robberData.wallet || 0) + amountStolen;
+            victimData.wallet = (victimData.wallet || 0) - amountStolen;
             robberData.lastRob = now;
 
             await setEconomyData(client, guildId, robberId, robberData);
             await setEconomyData(client, guildId, victimUser.id, victimData);
 
-            resultEmbed
-                .addFields(
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
                     {
-                        name: `Your New Cash (${interaction.user.username})`,
-                        value: `$${robberData.wallet.toLocaleString()}`,
-                        inline: true,
-                    },
-                    {
-                        name: `Victim's New Cash (${victimUser.username})`,
-                        value: `$${victimData.wallet.toLocaleString()}`,
-                        inline: true,
-                    },
-                )
-                .setFooter({ text: `Next robbery available in 4 hours.` });
+                        type: 17,
+                        accent_color: 0x2ECC71,
+                        components: [
+                            {
+                                type: 10,
+                                content: "# 🦹 Robbery Successful!"
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `✅ You successfully stole **$${amountStolen.toLocaleString()}** from **${victimUser.username}**!`
+                            },
+                            {
+                                type: 14,
+                                divider: false
+                            },
+                            {
+                                type: 10,
+                                content: `💵 **Your New Balance:** $${robberData.wallet.toLocaleString()}\n👤 **${victimUser.username}'s New Balance:** $${victimData.wallet.toLocaleString()}`
+                            },
+                            {
+                                type: 14,
+                                divider: false
+                            },
+                            {
+                                type: 10,
+                                content: `🕐 **Next Robbery:** Available in 4 hours`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# 🕒 Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
+            });
+        } else {
+            const fineAmount = Math.floor((robberData.wallet || 0) * FINE_PERCENTAGE);
+            robberData.wallet = Math.max(0, (robberData.wallet || 0) - fineAmount);
+            robberData.lastRob = now;
 
-            await InteractionHelper.safeEditReply(interaction, { embeds: [resultEmbed] });
+            await setEconomyData(client, guildId, robberId, robberData);
+            await setEconomyData(client, guildId, victimUser.id, victimData);
+
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        accent_color: 0xE74C3C,
+                        components: [
+                            {
+                                type: 10,
+                                content: "# 🚔 Robbery Failed!"
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `❌ You failed the robbery and were caught! You were fined **$${fineAmount.toLocaleString()}** of your own cash.`
+                            },
+                            {
+                                type: 14,
+                                divider: false
+                            },
+                            {
+                                type: 10,
+                                content: `💵 **Your New Balance:** $${robberData.wallet.toLocaleString()}\n👤 **${victimUser.username}'s Balance:** $${victimData.wallet.toLocaleString()}`
+                            },
+                            {
+                                type: 14,
+                                divider: false
+                            },
+                            {
+                                type: 10,
+                                content: `🕐 **Next Robbery:** Available in 4 hours`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# 🕒 Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
+            });
+        }
     }, { command: 'rob' })
 };
-
-
-
