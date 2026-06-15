@@ -1,10 +1,24 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { errorEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-
 import shopBrowse from './modules/shop_browse.js';
 import shopConfigSetrole from './modules/shop_config_setrole.js';
+
+// --- Reusable component factories ---
+
+export function errorContainer(title, description) {
+    return {
+        type: 17,
+        accent_color: 0xE74C3C,
+        components: [
+            { type: 10, content: `## ❌ ${title}` },
+            { type: 14, divider: true },
+            { type: 10, content: description },
+        ]
+    };
+}
+
+// --- Command definition ---
 
 export default {
     data: new SlashCommandBuilder()
@@ -46,14 +60,15 @@ export default {
             }
 
             return InteractionHelper.safeReply(interaction, {
-                embeds: [errorEmbed('Error', 'Unknown subcommand.')],
-                flags: MessageFlags.Ephemeral,
+                components: [errorContainer('Unknown Subcommand', 'The subcommand you used is not recognized.')],
+                flags: MessageFlags.Ephemeral | 32768,
             });
+
         } catch (error) {
             logger.error('shop command error:', error);
             await InteractionHelper.safeReply(interaction, {
-                content: '❌ An error occurred while running the shop command.',
-                flags: MessageFlags.Ephemeral,
+                components: [errorContainer('Error', 'An error occurred while running the shop command.')],
+                flags: MessageFlags.Ephemeral | 32768,
             }).catch(() => {});
         }
     },
