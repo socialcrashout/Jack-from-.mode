@@ -1,232 +1,182 @@
 import { SlashCommandBuilder } from 'discord.js';
+import { shopItems } from '../../config/shop/items.js';
 import { getEconomyData, setEconomyData } from '../../utils/economy.js';
+import { getGuildConfig } from '../../services/guildConfig.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
-const CRIME_COOLDOWN = 60 * 60 * 1000;
-const JAIL_TIME = 2 * 60 * 60 * 1000;
+const SHOP_ITEMS = shopItems;
 
-const CRIME_TYPES = [
-    { name: "Pickpocketing", min: 100, max: 500, risk: 0.3 },
-    { name: "Burglary", min: 300, max: 1000, risk: 0.4 },
-    { name: "Bank Heist", min: 1000, max: 5000, risk: 0.6 },
-    { name: "Art Theft", min: 2000, max: 10000, risk: 0.7 },
-    { name: "Cybercrime", min: 5000, max: 20000, risk: 0.8 },
-];
+const errorContainer = (title, description, user) => ({
+    components: [
+        {
+            type: 17,
+            accent_color: 0xE74C3C,
+            components: [
+                { type: 10, content: `# ${title}` },
+                { type: 14, divider: true },
+                { type: 10, content: description },
+                { type: 14, divider: true },
+                { type: 10, content: `-# 🕒 Requested by ${user}` }
+            ]
+        }
+    ],
+    flags: 32768
+});
 
 export default {
     data: new SlashCommandBuilder()
-        .setName('crime')
-        .setDescription('Commit a crime to earn money (risky)')
+        .setName('buy')
+        .setDescription('Buy an item from the shop')
         .addStringOption(option =>
             option
-                .setName('type')
-                .setDescription('Type of crime to commit')
+                .setName('item_id')
+                .setDescription('ID of the item to buy')
                 .setRequired(true)
-                .addChoices(
-                    { name: 'Pickpocketing', value: 'pickpocketing' },
-                    { name: 'Burglary', value: 'burglary' },
-                    { name: 'Bank Heist', value: 'bank-heist' },
-                    { name: 'Art Theft', value: 'art-theft' },
-                    { name: 'Cybercrime', value: 'cybercrime' },
-                )
+        )
+        .addIntegerOption(option =>
+            option
+                .setName('quantity')
+                .setDescription('Quantity to buy (default: 1)')
+                .setRequired(false)
+                .setMinValue(1)
+                .setMaxValue(10)
         ),
 
     execute: withErrorHandling(async (interaction, config, client) => {
-        await InteractionHelper.safeDefer(interaction);
+        const deferred = await InteractionHelper.safeDefer(interaction);
+        if (!deferred) return;
 
         const userId = interaction.user.id;
         const guildId = interaction.guildId;
-        const now = Date.now();
+        const itemId = interaction.options.getString("item_id").toLowerCase();
+        const quantity = interaction.options.getInteger("quantity") || 1;
+
+        const item = SHOP_ITEMS.find(i => i.id === itemId);
+
+        if (!item) {
+            await InteractionHelper.safeEditReply(interaction, errorContainer(
+                "❌ Item Not Found",
+                `The item ID \`${itemId}\` does not exist in the shop.`,
+                interaction.user
+            ));
+            return;
+        }
+
+        if (quantity < 1) {
+            await InteractionHelper.safeEditReply(interaction, errorContainer(
+                "❌ Invalid Quantity",
+                "You must purchase a quantity of 1 or more.",
+                interaction.user
+            ));
+            return;
+        }
+
+        const totalCost = item.price * quantity;
+
+        const guildConfig = await getGuildConfig(client, guildId);
+        const PREMIUM_ROLE_ID = guildConfig.premiumRoleId;
 
         const userData = await getEconomyData(client, guildId, userId);
-        const lastCrime = userData.cooldowns?.crime || 0;
-        const isJailed = userData.jailedUntil && userData.jailedUntil > now;
 
-        if (isJailed) {
-            const timeLeft = Math.ceil((userData.jailedUntil - now) / (1000 * 60));
-
-            await InteractionHelper.safeEditReply(interaction, {
-                components: [
-                    {
-                        type: 17,
-                        accent_color: 0xE74C3C,
-                        components: [
-                            {
-                                type: 10,
-                                content: "# 🔒 You're in Jail"
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `You can't commit crimes while in jail! You'll be released in **${timeLeft} minute(s)**.`
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `-# 🕒 Requested by ${interaction.user}`
-                            }
-                        ]
-                    }
-                ],
-                flags: 32768
-            });
+        if (userData.wallet < totalCost) {
+            await InteractionHelper.safeEditReply(interaction, errorContainer(
+                "❌ Insufficient Funds",
+                `You need **$${totalCost.toLocaleString()}** to purchase ${quantity}x **${item.name}**, but you only have **$${userData.wallet.toLocaleString()}** in your wallet.`,
+                interaction.user
+            ));
             return;
         }
 
-        if (now < lastCrime + CRIME_COOLDOWN) {
-            const timeLeft = Math.ceil((lastCrime + CRIME_COOLDOWN - now) / (1000 * 60));
-
-            await InteractionHelper.safeEditReply(interaction, {
-                components: [
-                    {
-                        type: 17,
-                        accent_color: 0xE74C3C,
-                        components: [
-                            {
-                                type: 10,
-                                content: "# ⏰ Laying Low"
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `You need to lay low for a bit! Try again in **${timeLeft} minute(s)**.`
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `-# 🕒 Requested by ${interaction.user}`
-                            }
-                        ]
-                    }
-                ],
-                flags: 32768
-            });
-            return;
+        if (item.type === "role" && itemId === "premium_role") {
+            if (!PREMIUM_ROLE_ID) {
+                await InteractionHelper.safeEditReply(interaction, errorContainer(
+                    "❌ Not Configured",
+                    "The **Premium Shop Role** has not been configured by a server administrator yet.",
+                    interaction.user
+                ));
+                return;
+            }
+            if (interaction.member.roles.cache.has(PREMIUM_ROLE_ID)) {
+                await InteractionHelper.safeEditReply(interaction, errorContainer(
+                    "❌ Already Owned",
+                    `You already have the **${item.name}** role.`,
+                    interaction.user
+                ));
+                return;
+            }
+            if (quantity > 1) {
+                await InteractionHelper.safeEditReply(interaction, errorContainer(
+                    "❌ Invalid Quantity",
+                    `You can only purchase the **${item.name}** role once.`,
+                    interaction.user
+                ));
+                return;
+            }
         }
 
-        const crimeType = interaction.options.getString("type").toLowerCase();
-        const crime = CRIME_TYPES.find(
-            c => c.name.toLowerCase().replace(/\s+/g, '-') === crimeType
-        );
+        userData.wallet -= totalCost;
 
-        if (!crime) {
-            throw createError(
-                "Invalid crime type",
-                ErrorTypes.VALIDATION,
-                "Please select a valid crime type.",
-                { crimeType }
-            );
+        let extraText = '';
+
+        if (item.type === "role" && itemId === "premium_role") {
+            const member = interaction.member;
+            const role = interaction.guild.roles.cache.get(PREMIUM_ROLE_ID);
+
+            if (!role) {
+                throw createError(
+                    "Role not found",
+                    ErrorTypes.CONFIGURATION,
+                    "The configured premium role no longer exists in this guild.",
+                    { roleId: PREMIUM_ROLE_ID }
+                );
+            }
+
+            try {
+                await member.roles.add(role, `Purchased role: ${item.name}`);
+                extraText = `\n👑 **The role ${role.toString()} has been granted to you!**`;
+            } catch (roleError) {
+                userData.wallet += totalCost;
+                await setEconomyData(client, guildId, userId, userData);
+                throw createError(
+                    "Role assignment failed",
+                    ErrorTypes.DISCORD_API,
+                    "Successfully deducted money, but failed to grant the role. Your cash has been refunded.",
+                    { roleId: PREMIUM_ROLE_ID, originalError: roleError.message }
+                );
+            }
+        } else if (item.type === "upgrade") {
+            userData.upgrades[itemId] = true;
+            extraText = `\n✨ **Your upgrade is now active!**`;
+        } else if (item.type === "consumable") {
+            userData.inventory[itemId] = (userData.inventory[itemId] || 0) + quantity;
         }
 
-        const isSuccess = Math.random() > crime.risk;
-        const amountEarned = isSuccess
-            ? Math.floor(Math.random() * (crime.max - crime.min + 1)) + crime.min
-            : 0;
+        await setEconomyData(client, guildId, userId, userData);
 
-        userData.cooldowns = userData.cooldowns || {};
-        userData.cooldowns.crime = now;
-
-        if (isSuccess) {
-            userData.wallet = (userData.wallet || 0) + amountEarned;
-            await setEconomyData(client, guildId, userId, userData);
-
-            await InteractionHelper.safeEditReply(interaction, {
-                components: [
-                    {
-                        type: 17,
-                        accent_color: 0x2ECC71,
-                        components: [
-                            {
-                                type: 10,
-                                content: "# 🦹 Crime Successful!"
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `✅ You successfully committed **${crime.name}** and got away with it!`
-                            },
-                            {
-                                type: 14,
-                                divider: false
-                            },
-                            {
-                                type: 10,
-                                content: `💵 **Earned:** $${amountEarned.toLocaleString()}\n💰 **New Wallet Balance:** $${userData.wallet.toLocaleString()}`
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `-# 🕒 Requested by ${interaction.user}`
-                            }
-                        ]
-                    }
-                ],
-                flags: 32768
-            });
-        } else {
-            const fine = Math.floor((crime.min * 0.2));
-            userData.wallet = Math.max(0, (userData.wallet || 0) - fine);
-            userData.jailedUntil = now + JAIL_TIME;
-            await setEconomyData(client, guildId, userId, userData);
-
-            await InteractionHelper.safeEditReply(interaction, {
-                components: [
-                    {
-                        type: 17,
-                        accent_color: 0xE74C3C,
-                        components: [
-                            {
-                                type: 10,
-                                content: "# 🚔 Crime Failed!"
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `❌ You were caught attempting **${crime.name}** and sent to jail!`
-                            },
-                            {
-                                type: 14,
-                                divider: false
-                            },
-                            {
-                                type: 10,
-                                content: `💸 **Fine:** $${fine.toLocaleString()}\n🔒 **Jail Time:** 2 hours\n💰 **New Wallet Balance:** $${userData.wallet.toLocaleString()}`
-                            },
-                            {
-                                type: 14,
-                                divider: true
-                            },
-                            {
-                                type: 10,
-                                content: `-# 🕒 Requested by ${interaction.user}`
-                            }
-                        ]
-                    }
-                ],
-                flags: 32768
-            });
-        }
-    }, { command: 'crime' })
+        await InteractionHelper.safeEditReply(interaction, {
+            components: [
+                {
+                    type: 17,
+                    accent_color: 0x2ECC71,
+                    components: [
+                        { type: 10, content: "# 💰 Purchase Successful" },
+                        { type: 14, divider: true },
+                        {
+                            type: 10,
+                            content: `✅ You purchased ${quantity}x **${item.name}** for **$${totalCost.toLocaleString()}**!${extraText}`
+                        },
+                        { type: 14, divider: false },
+                        {
+                            type: 10,
+                            content: `💵 **New Wallet Balance:** $${userData.wallet.toLocaleString()}`
+                        },
+                        { type: 14, divider: true },
+                        { type: 10, content: `-# 🕒 Requested by ${interaction.user}` }
+                    ]
+                }
+            ],
+            flags: 32768
+        });
+    }, { command: 'buy' })
 };
