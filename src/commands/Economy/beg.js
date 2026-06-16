@@ -78,10 +78,10 @@ export default {
         let newCash = userData.wallet;
 
         const successMessages = [
-            `A kind stranger drops **${{amount}}** into your cup.`,
-            `You spotted an unattended wallet! You grab **${{amount}}** and run.`,
-            `Someone took pity on you and gave you **${{amount}}**!`,
-            `You found **${{amount}}** under a park bench.`,
+            "A kind stranger drops **${amount}** into your cup.",
+            "You spotted an unattended wallet! You grab **${amount}** and run.",
+            "Someone took pity on you and gave you **${amount}**!",
+            "You found **${amount}** under a park bench.",
         ];
 
         const failMessages = [
@@ -98,7 +98,7 @@ export default {
             newCash += amountWon;
 
             const message = successMessages[Math.floor(Math.random() * successMessages.length)]
-                .replace('{amount}', amountWon.toLocaleString());
+                .replace('${amount}', `$${amountWon.toLocaleString()}`);
 
             components = [
                 {
