@@ -45,22 +45,76 @@ export default {
 
         if (isJailed) {
             const timeLeft = Math.ceil((userData.jailedUntil - now) / (1000 * 60));
-            throw createError(
-                "User is in jail",
-                ErrorTypes.RATE_LIMIT,
-                `You're in jail for ${timeLeft} more minutes!`,
-                { jailTimeRemaining: userData.jailedUntil - now }
-            );
+
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        accent_color: 0xE74C3C,
+                        components: [
+                            {
+                                type: 10,
+                                content: "# 🔒 You're in Jail"
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `You can't commit crimes while in jail! You'll be released in **${timeLeft} minute(s)**.`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# 🕒 Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
+            });
+            return;
         }
 
         if (now < lastCrime + CRIME_COOLDOWN) {
             const timeLeft = Math.ceil((lastCrime + CRIME_COOLDOWN - now) / (1000 * 60));
-            throw createError(
-                "Crime cooldown active",
-                ErrorTypes.RATE_LIMIT,
-                `You need to wait ${timeLeft} more minutes before committing another crime.`,
-                { remaining: lastCrime + CRIME_COOLDOWN - now, cooldownType: 'crime' }
-            );
+
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        accent_color: 0xE74C3C,
+                        components: [
+                            {
+                                type: 10,
+                                content: "# ⏰ Laying Low"
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `You need to lay low for a bit! Try again in **${timeLeft} minute(s)**.`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# 🕒 Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
+            });
+            return;
         }
 
         const crimeType = interaction.options.getString("type").toLowerCase();
