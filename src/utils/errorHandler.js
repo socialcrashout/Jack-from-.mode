@@ -27,8 +27,6 @@
  */
 
 import { logger } from './logger.js';
-import { createEmbed } from './embeds.js';
-import { MessageFlags } from 'discord.js';
 import { getErrorMetadata, getDefaultErrorCodeByType, resolveErrorCode, ErrorCodes } from './errorRegistry.js';
 
 
@@ -174,16 +172,48 @@ export function getUserMessage(error, context = {}) {
 
 
 
+function getErrorTitle(errorType) {
+    const titles = {
+        [ErrorTypes.VALIDATION]: "❌ Invalid Input",
+        [ErrorTypes.PERMISSION]: "🚫 Permission Denied",
+        [ErrorTypes.CONFIGURATION]: "⚙️ Configuration Error",
+        [ErrorTypes.DATABASE]: "🗄️ Database Error",
+        [ErrorTypes.NETWORK]: "🌐 Network Error",
+        [ErrorTypes.DISCORD_API]: "🔌 API Error",
+        [ErrorTypes.USER_INPUT]: "💬 Input Error",
+        [ErrorTypes.RATE_LIMIT]: "⏱️ Slow Down!",
+        [ErrorTypes.UNKNOWN]: "❓ Unexpected Error"
+    };
+    
+    return titles[errorType] || titles[ErrorTypes.UNKNOWN];
+}
+
+
+
+
+function getExtraContent(errorType) {
+    if (errorType === ErrorTypes.RATE_LIMIT) {
+        return "⏳ Please wait a moment before trying again.";
+    }
+    if (errorType === ErrorTypes.PERMISSION) {
+        return "🔧 Contact a server administrator if you believe this is an error.";
+    }
+    if (errorType === ErrorTypes.CONFIGURATION) {
+        return "📋 This feature needs to be configured by a server administrator.";
+    }
+    return null;
+}
+
+
+
+
 export async function handleInteractionError(interaction, error, context = {}) {
     const errorType = categorizeError(error);
     const userMessage = getUserMessage(error, context);
     const resolvedErrorCode = resolveErrorCode({ error, errorType, context });
     const errorMetadata = getErrorMetadata(resolvedErrorCode);
     const traceId = context.traceId || interaction?.traceContext?.traceId || interaction?.traceId || error?.context?.traceId;
-    
-    
-    
-    
+
     const isUserError = [
         ErrorTypes.VALIDATION,
         ErrorTypes.RATE_LIMIT,
@@ -191,7 +221,7 @@ export async function handleInteractionError(interaction, error, context = {}) {
         ErrorTypes.PERMISSION
     ].includes(errorType);
     const isExpectedError = Boolean(error?.context?.expected === true || error?.context?.suppressErrorLog === true);
-    
+
     const logData = {
         event: 'interaction.error',
         errorCode: resolvedErrorCode,
@@ -214,45 +244,49 @@ export async function handleInteractionError(interaction, error, context = {}) {
         },
         context
     };
-    
+
     if (isUserError || isExpectedError) {
         if (errorType !== ErrorTypes.RATE_LIMIT) {
             logger.debug(`User Error [${errorType.toUpperCase()}]: ${error.message}`, logData);
         }
     } else {
-        // System errors (database, network, etc.) - unexpected failures
         logger.error(`System Error [${errorType.toUpperCase()}]`, {
             ...logData,
             stack: error.stack
         });
     }
 
-    const embed = createEmbed({
-        title: getErrorTitle(errorType),
-        description: userMessage,
-        color: 'error',
-        timestamp: true
-    });
+    // Build v2 container components
+    const containerComponents = [
+        { type: 10, content: `# ${getErrorTitle(errorType)}` },
+        { type: 14, divider: true },
+        { type: 10, content: userMessage },
+    ];
 
-    if (errorType === ErrorTypes.RATE_LIMIT) {
-        embed.addFields({
-            name: "💡 Tip",
-            value: "Rate limits help prevent spam. Wait a moment before trying again."
-        });
-    } else if (errorType === ErrorTypes.PERMISSION) {
-        embed.addFields({
-            name: "🔧 Need Help?",
-            value: "Contact a server administrator if you believe this is an error."
-        });
-    } else if (errorType === ErrorTypes.CONFIGURATION) {
-        embed.addFields({
-            name: "📋 Configuration",
-            value: "This feature needs to be configured by a server administrator."
-        });
+    const extraContent = getExtraContent(errorType);
+    if (extraContent) {
+        containerComponents.push({ type: 14, divider: false });
+        containerComponents.push({ type: 10, content: extraContent });
     }
 
+    containerComponents.push({ type: 14, divider: true });
+
+    if (interaction.user) {
+        containerComponents.push({ type: 10, content: `-# 🕒 Requested by ${interaction.user}` });
+    }
+
+    const errorMessage = {
+        components: [
+            {
+                type: 17,
+                accent_color: 0xE74C3C,
+                components: containerComponents
+            }
+        ],
+        flags: 32768
+    };
+
     try {
-        
         if (!interaction || !interaction.id) {
             logger.warn('Interaction was null or invalid when handling error', {
                 event: 'interaction.error.invalid_interaction',
@@ -263,7 +297,6 @@ export async function handleInteractionError(interaction, error, context = {}) {
             return;
         }
 
-        
         if (interaction.createdTimestamp && (Date.now() - interaction.createdTimestamp) > 14 * 60 * 1000) {
             logger.warn('Interaction expired before error handler could send response', {
                 event: 'interaction.error.expired',
@@ -277,21 +310,12 @@ export async function handleInteractionError(interaction, error, context = {}) {
             return;
         }
 
-        const errorMessage = { 
-            embeds: [embed]
-        };
-        
-        if (!interaction.deferred && !interaction.replied) {
-            errorMessage.flags = MessageFlags.Ephemeral;
-        }
-        
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply(errorMessage);
         } else {
             await interaction.reply(errorMessage);
         }
     } catch (replyError) {
-        
         if (replyError.code === 40060 || replyError.code === 10062) {
             logger.warn('Interaction already acknowledged or expired, cannot send error response:', {
                 event: 'interaction.error.response_unavailable',
@@ -315,25 +339,6 @@ export async function handleInteractionError(interaction, error, context = {}) {
             error: replyError
         });
     }
-}
-
-
-
-
-function getErrorTitle(errorType) {
-    const titles = {
-        [ErrorTypes.VALIDATION]: "❌ Invalid Input",
-        [ErrorTypes.PERMISSION]: "🚫 Permission Denied",
-        [ErrorTypes.CONFIGURATION]: "⚙️ Configuration Error",
-        [ErrorTypes.DATABASE]: "🗄️ Database Error",
-        [ErrorTypes.NETWORK]: "🌐 Network Error",
-        [ErrorTypes.DISCORD_API]: "🔌 API Error",
-        [ErrorTypes.USER_INPUT]: "💬 Input Error",
-        [ErrorTypes.RATE_LIMIT]: "⏱️ Slow Down!",
-        [ErrorTypes.UNKNOWN]: "❓ Unexpected Error"
-    };
-    
-    return titles[errorType] || titles[ErrorTypes.UNKNOWN];
 }
 
 
@@ -381,7 +386,3 @@ export default {
     withErrorHandling,
     createError
 };
-
-
-
-
