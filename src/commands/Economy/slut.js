@@ -1,5 +1,4 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed } from '../../utils/embeds.js';
 import { getEconomyData, setEconomyData } from '../../utils/economy.js';
 import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
 import { logger } from '../../utils/logger.js';
@@ -60,7 +59,7 @@ function resolveOutcome(activity, wallet) {
             type: 'payout',
             delta: amount,
             message: randomChoice(POSITIVE_OUTCOMES),
-            title: `💰 ${activity.name} - Payout`
+            title: `💰 ${activity.name} — Payout`
         };
     }
 
@@ -74,7 +73,7 @@ function resolveOutcome(activity, wallet) {
             type: 'fine',
             delta: -amount,
             message: randomChoice(FINE_OUTCOMES),
-            title: `🚨 ${activity.name} - Fined`
+            title: `🚨 ${activity.name} — Fined`
         };
     }
 
@@ -86,7 +85,7 @@ function resolveOutcome(activity, wallet) {
             type: 'robbed',
             delta: -amount,
             message: randomChoice(ROBBED_OUTCOMES),
-            title: `🕵️ ${activity.name} - Robbed`
+            title: `🕵️ ${activity.name} — Robbed`
         };
     }
 
@@ -97,7 +96,7 @@ function resolveOutcome(activity, wallet) {
         type: 'loss',
         delta: -amount,
         message: randomChoice(LOSS_OUTCOMES),
-        title: `❌ ${activity.name} - Loss`
+        title: `❌ ${activity.name} — Loss`
     };
 }
 
@@ -110,84 +109,102 @@ export default {
         const deferred = await InteractionHelper.safeDefer(interaction);
         if (!deferred) return;
 
-            const userId = interaction.user.id;
-            const guildId = interaction.guildId;
-            const now = Date.now();
+        const userId = interaction.user.id;
+        const guildId = interaction.guildId;
+        const now = Date.now();
 
-            logger.debug(`[ECONOMY] Slut command started for ${userId}`, { userId, guildId });
+        logger.debug(`[ECONOMY] Slut command started for ${userId}`, { userId, guildId });
 
-            const userData = await getEconomyData(client, guildId, userId);
+        const userData = await getEconomyData(client, guildId, userId);
 
-            if (!userData) {
-                throw createError(
-                    "Failed to load economy data for slut command",
-                    ErrorTypes.DATABASE,
-                    "Failed to load your economy data. Please try again later.",
-                    { userId, guildId }
-                );
-            }
+        if (!userData) {
+            throw createError(
+                "Failed to load economy data for slut command",
+                ErrorTypes.DATABASE,
+                "Failed to load your economy data. Please try again later.",
+                { userId, guildId }
+            );
+        }
 
-            const lastSlut = userData.lastSlut || 0;
+        const lastSlut = userData.lastSlut || 0;
 
-            if (now - lastSlut < SLUT_COOLDOWN) {
-                const remainingTime = lastSlut + SLUT_COOLDOWN - now;
-                throw createError(
-                    "Slut cooldown active",
-                    ErrorTypes.RATE_LIMIT,
-                    `You need to wait before you can work again! Try again in **${Math.ceil(remainingTime / 60000)}** minutes.`,
-                    { timeRemaining: remainingTime, cooldownType: 'slut' }
-                );
-            }
+        if (now - lastSlut < SLUT_COOLDOWN) {
+            const remainingTime = lastSlut + SLUT_COOLDOWN - now;
+            const minutes = Math.ceil(remainingTime / 60000);
 
-            const activity = randomChoice(SLUT_ACTIVITIES);
-
-            const outcome = resolveOutcome(activity, userData.wallet || 0);
-
-            userData.lastSlut = now;
-            userData.totalSluts = (userData.totalSluts || 0) + 1;
-            userData.totalSlutEarnings = (userData.totalSlutEarnings || 0) + Math.max(0, outcome.delta);
-            userData.totalSlutLosses = (userData.totalSlutLosses || 0) + Math.max(0, -outcome.delta);
-
-            if (outcome.type !== 'payout') {
-                userData.failedSluts = (userData.failedSluts || 0) + 1;
-            }
-
-            userData.wallet = Math.max(0, (userData.wallet || 0) + outcome.delta);
-
-            await setEconomyData(client, guildId, userId, userData);
-
-            logger.info(`[ECONOMY_TRANSACTION] Slut activity resolved`, {
-                userId,
-                guildId,
-                activity: activity.name,
-                outcomeType: outcome.type,
-                amountDelta: outcome.delta,
-                newWallet: userData.wallet,
-                timestamp: new Date().toISOString()
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        accent_color: 0xE74C3C,
+                        components: [
+                            { type: 10, content: '# 😴 Too Tired to Work' },
+                            { type: 14, divider: true },
+                            { type: 10, content: `You need to rest before working again! Try again in **${minutes} minute(s)**.` },
+                            { type: 14, divider: true },
+                            { type: 10, content: `-# 🕒 Requested by ${interaction.user}` }
+                        ]
+                    }
+                ],
+                flags: 32768
             });
+            return;
+        }
 
-            const amountLabel = `${outcome.delta >= 0 ? '+' : '-'}$${Math.abs(outcome.delta).toLocaleString()}`;
-            const summaryLines = [
-                `${outcome.message}`,
-                `💸 **Net Result:** ${amountLabel}`,
-                `💳 **Current Balance:** $${userData.wallet.toLocaleString()}`,
-                `📊 **Total Sessions:** ${userData.totalSluts}`,
-                `💵 **Total Earned:** $${(userData.totalSlutEarnings || 0).toLocaleString()}`,
-                `🧾 **Total Lost:** $${(userData.totalSlutLosses || 0).toLocaleString()}`
-            ];
+        const activity = randomChoice(SLUT_ACTIVITIES);
+        const outcome = resolveOutcome(activity, userData.wallet || 0);
 
-            const embed = createEmbed({
-                title: outcome.title,
-                description: summaryLines.join('\n'),
-                color: outcome.delta >= 0 ? 'success' : 'error',
-                timestamp: true
-            });
+        userData.lastSlut = now;
+        userData.totalSluts = (userData.totalSluts || 0) + 1;
+        userData.totalSlutEarnings = (userData.totalSlutEarnings || 0) + Math.max(0, outcome.delta);
+        userData.totalSlutLosses = (userData.totalSlutLosses || 0) + Math.max(0, -outcome.delta);
 
-            await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
+        if (outcome.type !== 'payout') {
+            userData.failedSluts = (userData.failedSluts || 0) + 1;
+        }
+
+        userData.wallet = Math.max(0, (userData.wallet || 0) + outcome.delta);
+
+        await setEconomyData(client, guildId, userId, userData);
+
+        logger.info(`[ECONOMY_TRANSACTION] Slut activity resolved`, {
+            userId,
+            guildId,
+            activity: activity.name,
+            outcomeType: outcome.type,
+            amountDelta: outcome.delta,
+            newWallet: userData.wallet,
+            timestamp: new Date().toISOString()
+        });
+
+        const amountLabel = `${outcome.delta >= 0 ? '+' : '-'}$${Math.abs(outcome.delta).toLocaleString()}`;
+        const accentColor = outcome.delta >= 0 ? 0x2ECC71 : 0xE74C3C;
+
+        await InteractionHelper.safeEditReply(interaction, {
+            components: [
+                {
+                    type: 17,
+                    accent_color: accentColor,
+                    components: [
+                        { type: 10, content: `# ${outcome.title}` },
+                        { type: 14, divider: true },
+                        { type: 10, content: outcome.message },
+                        { type: 14, divider: true },
+                        {
+                            type: 10,
+                            content: `💸 **Net Result:** ${amountLabel}\n💳 **Current Balance:** $${userData.wallet.toLocaleString()}`
+                        },
+                        { type: 14, divider: false },
+                        {
+                            type: 10,
+                            content: `📊 **Total Sessions:** ${userData.totalSluts}\n💵 **Total Earned:** $${(userData.totalSlutEarnings || 0).toLocaleString()}\n🧾 **Total Lost:** $${(userData.totalSlutLosses || 0).toLocaleString()}`
+                        },
+                        { type: 14, divider: true },
+                        { type: 10, content: `-# 🕒 Requested by ${interaction.user}` }
+                    ]
+                }
+            ],
+            flags: 32768
+        });
     }, { command: 'slut' })
 };
-
-
-
-
-
