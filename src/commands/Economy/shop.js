@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import shopBrowse from './modules/shop_browse.js';
@@ -60,13 +60,13 @@ export default {
 
             return await InteractionHelper.safeEditReply(interaction, {
                 components: [errorContainer('Unknown Subcommand', 'The subcommand you used is not recognized.')],
-                flags: MessageFlags.Ephemeral | 32768,
+                flags: 32768,
             });
         } catch (error) {
             logger.error('shop command error:', error);
             await InteractionHelper.safeEditReply(interaction, {
                 components: [errorContainer('Error', 'An error occurred while running the shop command.')],
-                flags: MessageFlags.Ephemeral | 32768,
+                flags: 32768,
             }).catch(() => {});
         }
     },
