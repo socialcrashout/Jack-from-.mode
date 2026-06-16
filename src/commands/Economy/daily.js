@@ -39,12 +39,39 @@ export default {
         const lastDaily = userData.lastDaily || 0;
         if (now < lastDaily + DAILY_COOLDOWN) {
             const timeRemaining = lastDaily + DAILY_COOLDOWN - now;
-            throw createError(
-                "Daily cooldown active",
-                ErrorTypes.RATE_LIMIT,
-                `You need to wait before claiming daily again. Try again in **${formatDuration(timeRemaining)}**.`,
-                { timeRemaining, cooldownType: 'daily' }
-            );
+
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        accent_color: 0xE74C3C,
+                        components: [
+                            {
+                                type: 10,
+                                content: "# ⏰ Already Claimed"
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `You have already claimed your daily reward! Try again in **${formatDuration(timeRemaining)}**.`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# 🕒 Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
+            });
+            return;
         }
 
         const guildConfig = await getGuildConfig(client, guildId);
