@@ -18,7 +18,6 @@ export default {
         if (!deferred) return;
 
         const targetUser = interaction.options.getUser("user") || interaction.user;
-
         const wallet = 5000;
         const bank = 10000;
         const maxBank = 50000;
@@ -28,24 +27,33 @@ export default {
         await InteractionHelper.safeEditReply(interaction, {
             components: [
                 {
+                    // Outer Container (card)
                     type: 17,
                     accent_color: 0xF1C40F,
                     components: [
+                        // Header section: title + user avatar as thumbnail accessory
                         {
-                            type: 10,
-                            content: "# 💰 Balance Overview"
+                            type: 9, // Section
+                            components: [
+                                {
+                                    type: 10, // Text Display
+                                    content: "# 💰 Balance Overview"
+                                },
+                                {
+                                    type: 10,
+                                    content: `👤 **${targetUser.username}**`
+                                }
+                            ],
+                            accessory: {
+                                type: 11, // Thumbnail
+                                media: {
+                                    url: targetUser.displayAvatarURL({ size: 256 })
+                                }
+                            }
                         },
                         {
-                            type: 14,
+                            type: 14, // Separator
                             divider: true
-                        },
-                        {
-                            type: 10,
-                            content: `👤 **User:** ${targetUser}`
-                        },
-                        {
-                            type: 14,
-                            divider: false
                         },
                         {
                             type: 10,
