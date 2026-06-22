@@ -1,7 +1,3 @@
-
-
-
-
 import { logger } from '../utils/logger.js';
 import { getLevelingConfig, getXpForLevel, getUserLevelData, saveUserLevelData } from './leveling.js';
 import { logEvent, EVENT_TYPES } from './loggingService.js';
@@ -158,9 +154,8 @@ async function awardRoleReward(guild, member, roleId, level) {
 
 async function sendLevelUpAnnouncement(guild, member, levelData, config) {
   try {
-    const levelUpChannel = config.levelUpChannel 
-      ? guild.channels.cache.get(config.levelUpChannel) 
-      : guild.systemChannel;
+    // Level-up announcements always post in this fixed channel
+    const levelUpChannel = guild.channels.cache.get('1508652996257386516');
     
     if (!levelUpChannel || !levelUpChannel.isTextBased()) {
       return;
@@ -186,5 +181,3 @@ async function sendLevelUpAnnouncement(guild, member, levelData, config) {
     logger.error('Error sending level up announcement:', error);
   }
 }
-
-
