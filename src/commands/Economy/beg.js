@@ -44,7 +44,6 @@ export default {
                 components: [
                     {
                         type: 17,
-                        accent_color: 0xE74C3C,
                         components: [
                             {
                                 type: 10,
@@ -103,7 +102,6 @@ export default {
             components = [
                 {
                     type: 17,
-                    accent_color: 0x2ECC71,
                     components: [
                         {
                             type: 10,
@@ -138,7 +136,6 @@ export default {
             components = [
                 {
                     type: 17,
-                    accent_color: 0xE74C3C,
                     components: [
                         {
                             type: 10,
