@@ -1,9 +1,9 @@
 import { SlashCommandBuilder } from "discord.js";
-import noblox from "noblox.js";
+import axios from "axios";
 import { withErrorHandling } from "../../utils/errorHandler.js";
 import { InteractionHelper } from "../../utils/interactionHelper.js";
 
-const GROUP_ID = 425292002; // <-- Replace with your Roblox Group ID
+const GROUP_ID = 425292002;
 
 export default {
     data: new SlashCommandBuilder()
@@ -15,9 +15,15 @@ export default {
         if (!deferred) return;
 
         try {
-            const group = await noblox.getGroup(GROUP_ID);
+            const { data: group } = await axios.get(
+                `https://groups.roblox.com/v1/groups/${GROUP_ID}`
+            );
 
-            const owner = group.owner ? group.owner.username : "Nobody";
+            const { data: icon } = await axios.get(
+                `https://thumbnails.roblox.com/v1/groups/icons?groupIds=${GROUP_ID}&size=420x420&format=Png&isCircular=false`
+            );
+
+            const iconUrl = icon.data?.[0]?.imageUrl ?? null;
 
             await InteractionHelper.safeEditReply(interaction, {
                 components: [
@@ -33,15 +39,17 @@ export default {
                                     },
                                     {
                                         type: 10,
-                                        content: `Official Roblox Group`
+                                        content: "Official Roblox Group"
                                     }
                                 ],
-                                accessory: {
-                                    type: 11,
-                                    media: {
-                                        url: `https://www.roblox.com/headshot-thumbnail/image?userId=${group.owner?.userId || 1}&width=420&height=420&format=png`
+                                ...(iconUrl && {
+                                    accessory: {
+                                        type: 11,
+                                        media: {
+                                            url: iconUrl
+                                        }
                                     }
-                                }
+                                })
                             },
                             {
                                 type: 14,
@@ -49,11 +57,11 @@ export default {
                             },
                             {
                                 type: 10,
-                                content: `👑 **Owner:** ${owner}`
+                                content: `👥 **Members:** ${group.memberCount.toLocaleString()}`
                             },
                             {
                                 type: 10,
-                                content: `👥 **Members:** ${group.memberCount.toLocaleString()}`
+                                content: `👑 **Owner:** ${group.owner?.username ?? "Unknown"}`
                             },
                             {
                                 type: 10,
@@ -65,7 +73,7 @@ export default {
                             },
                             {
                                 type: 10,
-                                content: `🔗 https://www.roblox.com/groups/${GROUP_ID}`
+                                content: `🔗 https://www.roblox.com/communities/${GROUP_ID}`
                             },
                             {
                                 type: 14,
@@ -81,8 +89,8 @@ export default {
                 flags: 32768
             });
 
-        } catch (err) {
-            console.error(err);
+        } catch (error) {
+            console.error(error);
 
             await InteractionHelper.safeEditReply(interaction, {
                 content: "❌ Failed to retrieve the Roblox group."
