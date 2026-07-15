@@ -1,50 +1,92 @@
-const {
-    SlashCommandBuilder,
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
-} = require("discord.js");
-const noblox = require("noblox.js");
+import { SlashCommandBuilder } from "discord.js";
+import noblox from "noblox.js";
+import { withErrorHandling } from "../../utils/errorHandler.js";
+import { InteractionHelper } from "../../utils/interactionHelper.js";
 
-const GROUP_ID = 425292002; // Replace with your Mode group ID
+const GROUP_ID = 12345678; // <-- Replace with your Roblox Group ID
 
-module.exports = {
-    name: "group",
-
+export default {
     data: new SlashCommandBuilder()
         .setName("group")
-        .setDescription("Displays the official Mode Roblox group."),
+        .setDescription("View the official Mode Roblox group."),
 
-    async execute(client, ctx) {
+    execute: withErrorHandling(async (interaction) => {
+        const deferred = await InteractionHelper.safeDefer(interaction);
+        if (!deferred) return;
+
         try {
             const group = await noblox.getGroup(GROUP_ID);
 
-            const embed = new EmbedBuilder()
-                .setColor("#ff5b5b")
-                .setTitle(group.name)
-                .setDescription(
-                    `**Owned by:** ${group.owner ? group.owner.username : "Nobody"}\n` +
-                    `**Members:** ${group.memberCount}\n` +
-                    `**Created:** <t:${Math.floor(new Date(group.created).getTime() / 1000)}:F>`
-                )
-                .setFooter({ text: "Mode" });
+            const owner = group.owner ? group.owner.username : "Nobody";
 
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setLabel("Roblox Group")
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(`https://www.roblox.com/groups/${GROUP_ID}`)
-            );
-
-            await ctx.reply({
-                embeds: [embed],
-                components: [row]
+            await InteractionHelper.safeEditReply(interaction, {
+                components: [
+                    {
+                        type: 17,
+                        components: [
+                            {
+                                type: 9,
+                                components: [
+                                    {
+                                        type: 10,
+                                        content: `# 🏢 ${group.name}`
+                                    },
+                                    {
+                                        type: 10,
+                                        content: `Official Roblox Group`
+                                    }
+                                ],
+                                accessory: {
+                                    type: 11,
+                                    media: {
+                                        url: `https://www.roblox.com/headshot-thumbnail/image?userId=${group.owner?.userId || 1}&width=420&height=420&format=png`
+                                    }
+                                }
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `👑 **Owner:** ${owner}`
+                            },
+                            {
+                                type: 10,
+                                content: `👥 **Members:** ${group.memberCount.toLocaleString()}`
+                            },
+                            {
+                                type: 10,
+                                content: `📝 **Description:**\n${group.description || "No description."}`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `🔗 https://www.roblox.com/groups/${GROUP_ID}`
+                            },
+                            {
+                                type: 14,
+                                divider: true
+                            },
+                            {
+                                type: 10,
+                                content: `-# Requested by ${interaction.user}`
+                            }
+                        ]
+                    }
+                ],
+                flags: 32768
             });
 
         } catch (err) {
             console.error(err);
-            await ctx.reply("❌ Unable to fetch the group information.");
+
+            await InteractionHelper.safeEditReply(interaction, {
+                content: "❌ Failed to retrieve the Roblox group."
+            });
         }
-    }
+    }, { command: "group" })
 };
