@@ -7,7 +7,7 @@ const {
 } = require("discord.js");
 const noblox = require("noblox.js");
 
-const GROUP_ID = YOUR_GROUP_ID; // Replace with your Mode group ID
+const GROUP_ID = 425292002; // Replace with your Mode group ID
 
 module.exports = {
     name: "group",
