@@ -3,7 +3,7 @@ import noblox from "noblox.js";
 import { withErrorHandling } from "../../utils/errorHandler.js";
 import { InteractionHelper } from "../../utils/interactionHelper.js";
 
-const GROUP_ID = 12345678; // <-- Replace with your Roblox Group ID
+const GROUP_ID = 425292002; // <-- Replace with your Roblox Group ID
 
 export default {
     data: new SlashCommandBuilder()
