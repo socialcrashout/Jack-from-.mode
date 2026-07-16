@@ -84,7 +84,7 @@ export default {
                                         type: 2,
                                         style: 5,
                                         label: "Mode",
-                                        url: `https://www.roblox.com/communities/${425292002}`
+                                        url: `https://www.roblox.com/communities/${GROUP_ID}`
                                     }
                                 ]
                             },
@@ -97,7 +97,7 @@ export default {
                                 items: [
                                     {
                                         media: {
-                                            url: https://cdn.discordapp.com/attachments/1502518130616963166/1518310251361730672/22_20260510_032209_0020.png?ex=6a59c0dc&is=6a586f5c&hm=f7492c4909f6d8427524bbf25a4edd8d4e7d03ee9a05948bedcab1137a87bffd
+                                            url: FOOTER_IMAGE_URL
                                         }
                                     }
                                 ]
